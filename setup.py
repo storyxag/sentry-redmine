@@ -3,18 +3,14 @@
 sentry-redmine
 ==================
 
-An extension for Sentry which integrates with Redmine. Specifically, it allows you to easily create
-Maniphest tasks from events within Sentry.
+An extension for Sentry which integrates with Redmine. Specifically, it allows
+you to easily create Redmine tickets from events within Sentry.
 
-:copyright: (c) 2011 by the Sentry Team, see AUTHORS for more details.
+:copyright: (c) 2015 by the Sentry Team, see AUTHORS for more details.
 :license: BSD, see LICENSE for more details.
 """
 from setuptools import setup, find_packages
 
-
-tests_require = [
-    'nose',
-]
 
 install_requires = [
     'sentry>=7.3.0',
@@ -32,15 +28,13 @@ setup(
     packages=find_packages(exclude=['tests']),
     zip_safe=False,
     install_requires=install_requires,
-    tests_require=tests_require,
-    extras_require={'test': tests_require},
     test_suite='runtests.runtests',
     include_package_data=True,
     entry_points={
-       'sentry.apps': [
+        'sentry.apps': [
             'redmine = sentry_redmine',
         ],
-       'sentry.plugins': [
+        'sentry.plugins': [
             'redmine = sentry_redmine.plugin:RedminePlugin'
         ],
     },

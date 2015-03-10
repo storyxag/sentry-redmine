@@ -6,9 +6,6 @@ sentry_redmine.plugin
 :license: BSD, see LICENSE for more details.
 """
 
-import sys
-import logging
-from pprint import pformat
 from django import forms
 from django.utils.translation import ugettext_lazy as _
 
@@ -68,8 +65,10 @@ class RedminePlugin(IssuePlugin):
 
     def create_issue(self, group, form_data, **kwargs):
         """Create a Redmine issue"""
-        headers = { "X-Redmine-API-Key": self.get_option('key', group.project),
-                    'content-type': 'application/json' }
+        headers = {
+            "X-Redmine-API-Key": self.get_option('key', group.project),
+            "Content-Type": "application/json",
+        }
         url = urlparse.urljoin(self.get_option('host', group.project), "issues.json")
         payload = {
             'project_id': self.get_option('project_id', group.project),
@@ -78,16 +77,12 @@ class RedminePlugin(IssuePlugin):
             'subject': form_data['title'].encode('utf-8'),
             'description': form_data['description'].encode('utf-8'),
         }
-        #print >> sys.stderr, "url:", url
-        #print >> sys.stderr, "payload:\n", pformat(payload)
-        #print >> sys.stderr, pformat(group)
-        #print >> sys.stderr, pformat(dir(group))
 
         session = http.build_session()
         r = session.post(url, data=json.dumps({'issue': payload}), headers=headers)
         data = json.loads(r.text)
 
-        if not 'issue' in data or not 'id' in data['issue']:
+        if 'issue' not in data or 'id' not in data['issue']:
             raise Exception('Unable to create redmine ticket')
 
         return data['issue']['id']
