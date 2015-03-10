@@ -11,14 +11,12 @@ import logging
 from pprint import pformat
 from django import forms
 from django.utils.translation import ugettext_lazy as _
-from django.core.urlresolvers import reverse
 
+from sentry import http
+from sentry.utils import json
 from sentry.plugins.bases.issue import IssuePlugin
 
-import httplib
 import urlparse
-import requests
-import simplejson as json
 
 
 class RedmineOptionsForm(forms.Form):
@@ -62,28 +60,6 @@ class RedminePlugin(IssuePlugin):
     def get_new_issue_title(self, **kwargs):
         return 'Create Redmine Task'
 
-    def _get_group_description(self, request, group, event):
-        output = [
-            'Sentry: %s' % request.build_absolute_uri(reverse('sentry-group', kwargs={
-                'project_id': group.project.slug,
-                'team_slug': group.team.slug,
-                'group_id': group.id,
-            })),
-        ]
-        output.append('\n* Server: @%s@' % event.server_name)
-        output.append('* Logger: @%s@' % event.logger)
-        output.append('* Level: @%s@' % event.level)
-
-        body = self._get_group_body(request, group, event)
-        if body:
-            output.extend([
-                '',
-                '<pre>',
-                body,
-                '</pre>',
-            ])
-        return '\n'.join(output)
-
     def get_initial_form_data(self, request, group, event, **kwargs):
         return {
             'description': self._get_group_description(request, group, event),
@@ -107,20 +83,12 @@ class RedminePlugin(IssuePlugin):
         #print >> sys.stderr, pformat(group)
         #print >> sys.stderr, pformat(dir(group))
 
-        try:
-            r = requests.post(url, data=json.dumps({'issue': payload}), headers=headers)
-        except requests.exceptions.HTTPError as e:
-            raise forms.ValidationError('Unable to reach Redmine host: %s' % repr(e))
-
-        try:
-            data = json.loads(r.text)
-        except json.JSONDecodeError as e:
-            #print >> sys.stderr, "ERROR: %s" % e
-            #print >> sys.stderr, "RESP:", r.text
-            raise forms.ValidationError('Unable to reach Redmine host: %s' % repr(e))
+        session = http.build_session()
+        r = session.post(url, data=json.dumps({'issue': payload}), headers=headers)
+        data = json.loads(r.text)
 
         if not 'issue' in data or not 'id' in data['issue']:
-            raise forms.ValidationError('Unable to create redmine ticket')
+            raise Exception('Unable to create redmine ticket')
 
         return data['issue']['id']
 

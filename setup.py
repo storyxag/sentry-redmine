@@ -17,9 +17,7 @@ tests_require = [
 ]
 
 install_requires = [
-    'sentry>=4.9.8',
-    'requests>=0.2.0',
-    'simplejson'
+    'sentry>=7.3.0',
 ]
 
 setup(
