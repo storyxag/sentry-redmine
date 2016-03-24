@@ -1,37 +1,12 @@
-"""
-sentry_redmine.plugin
-~~~~~~~~~~~~~~~~~~~~~~~~~
+from __future__ import absolute_import
 
-:copyright: (c) 2011 by the Sentry Team, see AUTHORS for more details.
-:license: BSD, see LICENSE for more details.
-"""
-
-from django import forms
 from django.utils.translation import ugettext_lazy as _
 
-from sentry import http
-from sentry.utils import json
 from sentry.plugins.bases.issue import IssuePlugin
+from sentry.utils.http import absolute_uri
 
-import urlparse
-
-
-class RedmineOptionsForm(forms.Form):
-    host = forms.URLField(help_text=_("e.g. http://bugs.redmine.org"))
-    key = forms.CharField(widget=forms.TextInput(attrs={'class': 'span9'}))
-    project_id = forms.CharField(widget=forms.TextInput(attrs={'class': 'span9'}))
-    tracker_id = forms.CharField(widget=forms.TextInput(attrs={'class': 'span9'}))
-
-    def clean(self):
-        config = self.cleaned_data
-        if not all(config.get(k) for k in ('host', 'key', 'project_id', 'tracker_id')):
-            raise forms.ValidationError('Missing required configuration value')
-        return config
-
-
-class RedmineNewIssueForm(forms.Form):
-    title = forms.CharField(max_length=200, widget=forms.TextInput(attrs={'class': 'span9'}))
-    description = forms.CharField(widget=forms.Textarea(attrs={'class': 'span9'}))
+from .client import RedmineClient
+from .forms import RedmineOptionsForm, RedmineNewIssueForm
 
 
 class RedminePlugin(IssuePlugin):
@@ -52,7 +27,7 @@ class RedminePlugin(IssuePlugin):
     new_issue_form = RedmineNewIssueForm
 
     def is_configured(self, project, **kwargs):
-        return all((self.get_option(k, project) for k in ('host', 'key', 'project_id', 'tracker_id')))
+        return all((self.get_option(k, project) for k in ('host', 'key', 'project_id')))
 
     def get_new_issue_title(self, **kwargs):
         return 'Create Redmine Task'
@@ -60,33 +35,47 @@ class RedminePlugin(IssuePlugin):
     def get_initial_form_data(self, request, group, event, **kwargs):
         return {
             'description': self._get_group_description(request, group, event),
-            'title': 'Sentry:%s' % self._get_group_title(request, group, event),
+            'title': self._get_group_title(request, group, event),
         }
+
+    def _get_group_description(self, request, group, event):
+        output = [
+            absolute_uri(group.get_absolute_url()),
+        ]
+        body = self._get_group_body(request, group, event)
+        if body:
+            output.extend([
+                '',
+                '<pre>',
+                body,
+                '</pre>',
+            ])
+        return '\n'.join(output)
+
+    def get_client(self, project):
+        return RedmineClient(
+            host=self.get_option('host', project),
+            key=self.get_option('key', project),
+        )
 
     def create_issue(self, group, form_data, **kwargs):
-        """Create a Redmine issue"""
-        headers = {
-            "X-Redmine-API-Key": self.get_option('key', group.project),
-            "Content-Type": "application/json",
-        }
-        url = urlparse.urljoin(self.get_option('host', group.project), "issues.json")
-        payload = {
+        """
+        Create a Redmine issue
+        """
+        client = self.get_client(group.project)
+        default_priority = self.get_option('default_priority', group.project)
+        if default_priority is None:
+            default_priority = 4
+
+        response = client.create_issue({
             'project_id': self.get_option('project_id', group.project),
             'tracker_id': self.get_option('tracker_id', group.project),
-            'status_id': '0',
+            'priority_id': default_priority,
             'subject': form_data['title'].encode('utf-8'),
             'description': form_data['description'].encode('utf-8'),
-        }
-
-        session = http.build_session()
-        r = session.post(url, data=json.dumps({'issue': payload}), headers=headers)
-        data = json.loads(r.text)
-
-        if 'issue' not in data or 'id' not in data['issue']:
-            raise Exception('Unable to create redmine ticket')
-
-        return data['issue']['id']
+        })
+        return response['issue']['id']
 
     def get_issue_url(self, group, issue_id, **kwargs):
         host = self.get_option('host', group.project)
-        return urlparse.urljoin(host, '/issues/%s' % issue_id)
+        return '{}/issues/{}'.format(host.rstrip('/'), issue_id)
