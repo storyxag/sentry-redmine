@@ -10,13 +10,13 @@ from .forms import RedmineOptionsForm, RedmineNewIssueForm
 
 
 class RedminePlugin(IssuePlugin):
-    author = 'Idea Device'
-    author_url = 'https://github.com/ideadevice/sentry-redmine'
+    author = 'Sentry'
+    author_url = 'https://github.com/getsentry/sentry-redmine'
     version = '0.1.0'
     description = "Integrate Redmine issue tracking by linking a user account to a project."
     resource_links = [
-        ('Bug Tracker', 'https://github.com/ideadevice/sentry-redmine/issues'),
-        ('Source', 'https://github.com/ideadevice/sentry-redmine'),
+        ('Bug Tracker', 'https://github.com/getsentry/sentry-redmine/issues'),
+        ('Source', 'https://github.com/getsentry/sentry-redmine'),
     ]
 
     slug = 'redmine'
