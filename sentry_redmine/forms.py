@@ -69,11 +69,12 @@ class RedmineOptionsForm(forms.Form):
 
     def clean(self):
         cd = self.cleaned_data
-        client = RedmineClient(cd['host'], cd['key'])
-        try:
-            client.get_projects()
-        except Exception:
-            raise forms.ValidationError('There was an issue authenticating with Redmine')
+        if cd.get('host') and cd.get('key'):
+            client = RedmineClient(cd['host'], cd['key'])
+            try:
+                client.get_projects()
+            except Exception:
+                raise forms.ValidationError('There was an issue authenticating with Redmine')
         return cd
 
     def clean_host(self):
