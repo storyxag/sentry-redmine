@@ -21,18 +21,16 @@ class RedmineClient(object):
 
     def get_projects(self):
         limit = 100
-        offset = 0
         projects = []
 
         def get_response(limit, offset):
             return self.request('GET', '/projects.json?limit=%s&offset=%s' % (limit, offset))
 
-        response = get_response(limit, offset)
+        response = get_response(limit, 0)
 
         while len(response['projects']):
             projects.extend(response['projects'])
-            offset += limit
-            response = get_response(limit, offset)
+            response = get_response(limit, response['offset'] + response['limit'])
 
         return {'projects': projects}
 
