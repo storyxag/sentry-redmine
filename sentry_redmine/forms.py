@@ -1,4 +1,5 @@
 from __future__ import absolute_import
+import json
 
 from django import forms
 from django.utils.translation import ugettext_lazy as _
@@ -17,6 +18,11 @@ class RedmineOptionsForm(forms.Form):
         label='Tracker', coerce=int)
     default_priority = forms.TypedChoiceField(
         label='Default Priority', coerce=int)
+    extra_fields = forms.CharField(
+        widget=forms.Textarea(attrs={'rows': 5, 'class': 'span9'}),
+        help_text='Extra attributes (custom fields, status id, etc.) in JSON format',
+        label='Extra Fields',
+        required=False)
 
     def __init__(self, data=None, *args, **kwargs):
         super(RedmineOptionsForm, self).__init__(data=data, *args, **kwargs)
@@ -85,6 +91,24 @@ class RedmineOptionsForm(forms.Form):
         if url:
             return url.rstrip('/')
         return url
+
+    def clean_extra_fields(self):
+        """
+        Ensure that the value provided is either a valid JSON dictionary,
+        or the empty string.
+        """
+        extra_fields_json = self.cleaned_data.get('extra_fields').strip()
+        if not extra_fields_json:
+            return ''
+
+        try:
+            extra_fields_dict = json.loads(extra_fields_json)
+        except ValueError:
+            raise forms.ValidationError('Invalid JSON specified')
+
+        if not isinstance(extra_fields_dict, dict):
+            raise forms.ValidationError('JSON dictionary must be specified')
+        return json.dumps(extra_fields_dict, indent=4)
 
 
 class RedmineNewIssueForm(forms.Form):

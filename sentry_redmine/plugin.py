@@ -1,4 +1,5 @@
 from __future__ import absolute_import
+import json
 
 from django.utils.translation import ugettext_lazy as _
 
@@ -67,13 +68,22 @@ class RedminePlugin(IssuePlugin):
         if default_priority is None:
             default_priority = 4
 
-        response = client.create_issue({
+        issue_dict = {
             'project_id': self.get_option('project_id', group.project),
             'tracker_id': self.get_option('tracker_id', group.project),
             'priority_id': default_priority,
             'subject': form_data['title'].encode('utf-8'),
             'description': form_data['description'].encode('utf-8'),
-        })
+        }
+
+        extra_fields_str = self.get_option('extra_fields', group.project)
+        if extra_fields_str:
+            extra_fields = json.loads(extra_fields_str)
+        else:
+            extra_fields = {}
+        issue_dict.update(extra_fields)
+
+        response = client.create_issue(issue_dict)
         return response['issue']['id']
 
     def get_issue_url(self, group, issue_id, **kwargs):
