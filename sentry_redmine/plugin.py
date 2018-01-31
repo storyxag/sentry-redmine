@@ -3,11 +3,12 @@ import json
 
 from django.utils.translation import ugettext_lazy as _
 
+from sentry.exceptions import PluginError
 from sentry.plugins.bases.issue import IssuePlugin
 from sentry.utils.http import absolute_uri
 
 from .client import RedmineClient
-from .forms import RedmineOptionsForm, RedmineNewIssueForm
+from .forms import  RedmineNewIssueForm
 
 
 class RedminePlugin(IssuePlugin):
@@ -24,8 +25,16 @@ class RedminePlugin(IssuePlugin):
     title = _('Redmine')
     conf_title = 'Redmine'
     conf_key = 'redmine'
-    project_conf_form = RedmineOptionsForm
+ 
     new_issue_form = RedmineNewIssueForm
+
+    def __init__(self):
+        super(RedminePlugin, self).__init__()
+        self.client_errors = []
+        self.fields = []
+    
+    def has_project_conf(self):
+        return True
 
     def is_configured(self, project, **kwargs):
         return all((self.get_option(k, project) for k in ('host', 'key', 'project_id')))
@@ -89,3 +98,116 @@ class RedminePlugin(IssuePlugin):
     def get_issue_url(self, group, issue_id, **kwargs):
         host = self.get_option('host', group.project)
         return '{}/issues/{}'.format(host.rstrip('/'), issue_id)
+    
+
+    def build_config(self):
+        host = {'name':'host',
+                'label':'Host',
+                'type':'text',
+                'help':'e.g. http://bugs.redmine.org',
+                'required':True,}
+        key = {'name':'key',
+                'label':'Key',
+                'type':'text',
+                'help':'Your API key is available on your account page after enabling the Rest API (Administration -> Settings -> Authentication)',
+                'required':True,}
+        project_id = {'name':'project_id',
+            'label':'Project',
+            'type':'select',
+            'choices':[],
+            'required':True,}
+        tracker_id = {'name':'tracker_id',
+            'label':'Tracker',
+            'type':'select',
+            'choices':[],
+            'required':True,}
+        default_priority = {'name':'default_priority',
+            'label':'Default Priority',
+            'type':'select',
+            'choices':[],
+            'required':True,}
+        extra_fields = {'name':'extra_fields',
+                'label':'Extra Fields',
+                'type':'text',
+                'help':'Extra attributes (custom fields, status id, etc.) in JSON format',
+                'required':False,}
+        return [host, key, project_id, tracker_id, default_priority, extra_fields]
+
+    def add_choices(self, field_name, choices):
+        for field in self.fields:
+            if field_name == field['name']:
+                field['choices'] = choices
+                return
+
+    def remove_field(self, field_name):
+         for field in self.fields:
+            if field['name'] == field_name:
+                self.fields.remove(field)
+                return
+
+    def build_initial(self, project):
+        initial = {}
+        fields = ['host', 'key', 'project_id', 'tracker_id', 'default_priority', 'extra_fields']
+        for field in fields:
+            value = self.get_option(field, project) 
+            if value is not None:
+                initial[field] = value
+        return initial
+
+    def get_config(self, project, **kwargs):
+        self.client_errors = []
+        self.fields =  self.build_config()
+        initial = self.build_initial(project)
+
+        has_credentials = all(initial.get(k) for k in ('host', 'key'))
+        if has_credentials:
+            client = RedmineClient(initial['host'], initial['key'])
+            try:
+                projects = client.get_projects()
+            except Exception:
+                has_credentials = False
+                self.client_errors.append('There was an issue authenticating with Redmine')
+            else:
+                project_choices = [
+                    (p['id'], '%s (%s)' % (p['name'], p['identifier']))
+                    for p in projects['projects']
+                ]
+                self.add_choices('project_id', project_choices)
+
+        if has_credentials:
+            try:
+                trackers = client.get_trackers()
+            except Exception:
+                self.remove_field('tracker_id')
+            else:
+                tracker_choices = [
+                    (p['id'], p['name'])
+                    for p in trackers['trackers']
+                ]
+                self.add_choices('tracker_id', tracker_choices)
+
+            try:
+                priorities = client.get_priorities()
+            except Exception:
+                self.remove_field('default_priority')
+            else:
+                tracker_choices = [
+                    (p['id'], p['name'])
+                    for p in priorities['issue_priorities']
+                ]
+                self.add_choices('default_priority', tracker_choices)
+
+        if not has_credentials:
+            for field_name in ['project_id', 'tracker_id', 'default_priority']:
+                self.remove_field(field_name)
+        
+        return self.fields
+    
+
+    def validate_config(self, project, config, actor):
+        super(RedminePlugin, self).validate_config(project, config, actor)
+        if self.client_errors:
+            self.reset_options(project=project)
+            raise PluginError(self.client_errors[0])
+        return config
+
