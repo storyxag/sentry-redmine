@@ -10,8 +10,16 @@ you to easily create Redmine tickets from events within Sentry.
 :license: BSD, see LICENSE for more details.
 """
 from setuptools import setup, find_packages
+import os
 
-
+tests_require = [
+    'exam',
+    'flake8>=2.0,<2.1',
+    'responses',
+    'sentry>=8.9.0',
+    'pytest-cov>=2.5.1,<2.6.0',
+    'pyjwt>=0.3.2',
+]
 install_requires = [
     'sentry>=7.3.0',
 ]
@@ -28,6 +36,7 @@ setup(
     packages=find_packages(exclude=['tests']),
     zip_safe=False,
     install_requires=install_requires,
+    extra_requires={'tests': tests_require},
     test_suite='runtests.runtests',
     include_package_data=True,
     entry_points={
