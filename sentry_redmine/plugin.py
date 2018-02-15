@@ -10,7 +10,6 @@ from sentry.utils.http import absolute_uri
 from .client import RedmineClient
 from .forms import  RedmineNewIssueForm
 
-
 class RedminePlugin(IssuePlugin):
     author = 'Sentry'
     author_url = 'https://github.com/getsentry/sentry-redmine'
@@ -27,6 +26,7 @@ class RedminePlugin(IssuePlugin):
     conf_key = 'redmine'
  
     new_issue_form = RedmineNewIssueForm
+    
 
     def __init__(self):
         super(RedminePlugin, self).__init__()
@@ -133,10 +133,11 @@ class RedminePlugin(IssuePlugin):
                 'required':False,}
         return [host, key, project_id, tracker_id, default_priority, extra_fields]
 
-    def add_choices(self, field_name, choices):
+    def add_choices(self, field_name, choices, default):
         for field in self.fields:
             if field_name == field['name']:
                 field['choices'] = choices
+                field['default'] = default
                 return
 
     def remove_field(self, field_name):
@@ -145,11 +146,11 @@ class RedminePlugin(IssuePlugin):
                 self.fields.remove(field)
                 return
 
-    def build_initial(self, project):
+    def build_initial(self, inital_args, project):
         initial = {}
         fields = ['host', 'key', 'project_id', 'tracker_id', 'default_priority', 'extra_fields']
         for field in fields:
-            value = self.get_option(field, project) 
+            value = inital_args.get(field) or self.get_option(field, project) 
             if value is not None:
                 initial[field] = value
         return initial
@@ -157,7 +158,8 @@ class RedminePlugin(IssuePlugin):
     def get_config(self, project, **kwargs):
         self.client_errors = []
         self.fields =  self.build_config()
-        initial = self.build_initial(project)
+        initial_args = kwargs.get('initial') or {}
+        initial = self.build_initial(initial_args, project)
 
         has_credentials = all(initial.get(k) for k in ('host', 'key'))
         if has_credentials:
@@ -168,11 +170,13 @@ class RedminePlugin(IssuePlugin):
                 has_credentials = False
                 self.client_errors.append('There was an issue authenticating with Redmine')
             else:
-                project_choices = [
+                choices_value = self.get_option('project_id', project)
+                project_choices = [('', '--') ] if not choices_value else []
+                project_choices += [
                     (p['id'], '%s (%s)' % (p['name'], p['identifier']))
                     for p in projects['projects']
                 ]
-                self.add_choices('project_id', project_choices)
+                self.add_choices('project_id', project_choices, choices_value)
 
         if has_credentials:
             try:
@@ -180,24 +184,29 @@ class RedminePlugin(IssuePlugin):
             except Exception:
                 self.remove_field('tracker_id')
             else:
-                tracker_choices = [
-                    (p['id'], p['name'])
-                    for p in trackers['trackers']
+                choices_value = self.get_option('tracker_id', project)
+                tracker_choices = [('', '--') ] if not choices_value else []
+                tracker_choices += [
+                        (p['id'], p['name'])
+                        for p in trackers['trackers']
                 ]
-                self.add_choices('tracker_id', tracker_choices)
+                self.add_choices('tracker_id', tracker_choices, choices_value)
+
 
             try:
                 priorities = client.get_priorities()
             except Exception:
                 self.remove_field('default_priority')
             else:
-                tracker_choices = [
+                choices_value = self.get_option('default_priority', project)
+                tracker_choices = [('', '--') ] if not choices_value else []
+                tracker_choices += [
                     (p['id'], p['name'])
                     for p in priorities['issue_priorities']
                 ]
-                self.add_choices('default_priority', tracker_choices)
-
-        if not has_credentials:
+                self.add_choices('default_priority', tracker_choices, choices_value)
+                
+        if not has_credentials and not kwargs.get('add_additial_fields'):
             for field_name in ['project_id', 'tracker_id', 'default_priority']:
                 self.remove_field(field_name)
         
