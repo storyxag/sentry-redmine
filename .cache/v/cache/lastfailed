@@ -1,5 +1,0 @@
-{
-  "tests/test_plugin.py::RedminePluginTest::test_conf_key": true, 
-  "tests/test_plugin.py::RedminePluginTest::test_entry_point": true, 
-  "tests/test_plugin.py::RedminePluginTest::test_is_configured": true
-}
