@@ -12,6 +12,7 @@ cache:
     - $HOME/.cache/pip
 install:
     - pip install -U pip setuptools wheel codecov
+    - pip install psycopg2==2.7.0
     - pip install .
 script:
   - flake8
