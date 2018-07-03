@@ -217,18 +217,12 @@ class RedminePlugin(IssuePlugin):
     def validate_config(self, project, config, actor):
         super(RedminePlugin, self).validate_config(project, config, actor)
         self.client_errors = []
-        required_fields = ['project_id', 'tracker_id', 'default_priority']
-        index = [2, 3, 4]
-        
-        try:
-            for field in required_fields:
-                for i in index:
-                    if self.fields[i]['name'] == field:
-                        if config[field] == None or config[field] == '':
-                            self.logger.exception(six.text_type('{} required.'.format(field)))
-                            self.client_errors.append(field)
-        except IndexError:
-            pass
+
+        for field in self.fields:
+            if field['name'] in ['project_id', 'tracker_id', 'default_priority']:
+                if not config[field['name']]:
+                    self.logger.exception(six.text_type('{} required.'.format(field['name'])))
+                    self.client_errors.append(field['name'])
 
         if self.client_errors:
             raise PluginError(', '.join(self.client_errors) + ' required.')
