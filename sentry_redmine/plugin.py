@@ -1,5 +1,6 @@
 from __future__ import absolute_import
 import json
+import six
 
 from django.utils.translation import ugettext_lazy as _
 
@@ -112,20 +113,20 @@ class RedminePlugin(IssuePlugin):
                 'help':'Your API key is available on your account page after enabling the Rest API (Administration -> Settings -> Authentication)',
                 'required':True,}
         project_id = {'name':'project_id',
-            'label':'Project',
+            'label':'Project*',
             'type':'select',
             'choices':[],
-            'required':True,}
+            'required':False,}
         tracker_id = {'name':'tracker_id',
-            'label':'Tracker',
+            'label':'Tracker*',
             'type':'select',
             'choices':[],
-            'required':True,}
+            'required':False,}
         default_priority = {'name':'default_priority',
-            'label':'Default Priority',
+            'label':'Default Priority*',
             'type':'select',
             'choices':[],
-            'required':True,}
+            'required':False,}
         extra_fields = {'name':'extra_fields',
                 'label':'Extra Fields',
                 'type':'text',
@@ -205,18 +206,31 @@ class RedminePlugin(IssuePlugin):
                     for p in priorities['issue_priorities']
                 ]
                 self.add_choices('default_priority', tracker_choices, choices_value)
-                
-        if not has_credentials and not kwargs.get('add_additial_fields'):
-            for field_name in ['project_id', 'tracker_id', 'default_priority']:
+
+        if not has_credentials:
+            for field_name in ['project_id', 'tracker_id', 'default_priority', 'extra_fields']:
                 self.remove_field(field_name)
-        
+
         return self.fields
-    
+
 
     def validate_config(self, project, config, actor):
         super(RedminePlugin, self).validate_config(project, config, actor)
+        self.client_errors = []
+        required_fields = ['project_id', 'tracker_id', 'default_priority']
+        index = [2, 3, 4]
+        
+        try:
+            for field in required_fields:
+                for i in index:
+                    if self.fields[i]['name'] == field:
+                        if config[field] == None or config[field] == '':
+                            self.logger.exception(six.text_type('{} required.'.format(field)))
+                            self.client_errors.append(field)
+        except IndexError:
+            pass
+
         if self.client_errors:
-            self.reset_options(project=project)
-            raise PluginError(self.client_errors[0])
+            raise PluginError(', '.join(self.client_errors) + ' required.')
         return config
 
